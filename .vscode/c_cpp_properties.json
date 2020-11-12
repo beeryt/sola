@@ -1,0 +1,35 @@
+{
+    "configurations": [
+        {
+            "name": "!!! WARNING !!! AUTO-GENERATED FILE, PLEASE DO NOT MODIFY IT AND USE https://docs.platformio.org/page/projectconf/section_env_build.html#build-flags"
+        },
+        {
+            "name": "Win32",
+            "includePath": [
+                "c:/Users/CBeery/Documents/PlatformIO/Projects/sump/include",
+                "c:/Users/CBeery/Documents/PlatformIO/Projects/sump/src",
+                "C:/Users/CBeery/.platformio/packages/tool-unity",
+                ""
+            ],
+            "browse": {
+                "limitSymbolsToIncludedHeaders": true,
+                "path": [
+                    "c:/Users/CBeery/Documents/PlatformIO/Projects/sump/include",
+                    "c:/Users/CBeery/Documents/PlatformIO/Projects/sump/src",
+                    "C:/Users/CBeery/.platformio/packages/tool-unity",
+                    ""
+                ]
+            },
+            "defines": [
+                "PLATFORMIO=50002",
+                ""
+            ],
+            "intelliSenseMode": "clang-x64",
+            "compilerPath": "C:/Program Files/mingw-w64/x86_64-8.1.0-posix-seh-rt_v6-rev0/mingw64/bin/gcc.exe",
+            "compilerArgs": [
+                ""
+            ]
+        }
+    ],
+    "version": 4
+}
