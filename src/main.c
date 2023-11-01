@@ -2,55 +2,17 @@
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
 
+#include "ess.h"
+
 static void cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {}
 static ssize_t read_attr(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) { return 0; }
-
-#define read_blvl read_attr
-#define blvl_ccc_cfg_changed cfg_changed
 
 static uint8_t battery_level = 100U;
 
 BT_GATT_SERVICE_DEFINE(bas,
                        BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
-                       BT_GATT_CHARACTERISTIC(BT_UUID_BAS_BATTERY_LEVEL, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, read_blvl, NULL, &battery_level),
-                       BT_GATT_CCC(blvl_ccc_cfg_changed, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
-
-struct es_measurement_desc
-{
-        uint16_t flags;
-        uint8_t sampling_func;
-        uint8_t period[3];
-        uint8_t update_interval[3];
-        uint8_t application;
-        uint8_t uncertainty;
-} __packed;
-
-union Value
-{
-        uint16_t humidity;
-        int16_t temperature;
-};
-
-struct es_trigger_setting_desc
-{
-        uint8_t condition;
-        union
-        {
-                uint8_t operand[3];
-                union Value value;
-        };
-} __packed;
-
-struct es_configuration_desc
-{
-        uint8_t trigger_logic;
-} __packed;
-
-struct gatt_valid_range_desc
-{
-        union Value lower;
-        union Value upper;
-} __packed;
+                       BT_GATT_CHARACTERISTIC(BT_UUID_BAS_BATTERY_LEVEL, BT_GATT_CHRC_READ | BT_GATT_CHRC_NOTIFY, BT_GATT_PERM_READ, NULL, NULL, NULL),
+                       BT_GATT_CCC(NULL, BT_GATT_PERM_READ | BT_GATT_PERM_WRITE));
 
 BT_GATT_SERVICE_DEFINE(ess,
                        BT_GATT_PRIMARY_SERVICE(BT_UUID_ESS),
