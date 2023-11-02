@@ -1,13 +1,9 @@
 #include <zephyr/kernel.h>
 #include <zephyr/bluetooth/bluetooth.h>
 #include <zephyr/bluetooth/gatt.h>
+#include <zephyr/smf.h>
 
 #include "ess.h"
-
-static void cfg_changed(const struct bt_gatt_attr *attr, uint16_t value) {}
-static ssize_t read_attr(struct bt_conn *conn, const struct bt_gatt_attr *attr, void *buf, uint16_t len, uint16_t offset) { return 0; }
-
-static uint8_t battery_level = 100U;
 
 BT_GATT_SERVICE_DEFINE(bas,
                        BT_GATT_PRIMARY_SERVICE(BT_UUID_BAS),
