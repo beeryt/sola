@@ -12,7 +12,8 @@
  */
 int main(void)
 {
-    printk("boot: %d\n", k_uptime_get_32());
+    uint64_t timestamp = k_uptime_get();
+    printk("boot: %d\n", (uint32_t)timestamp);
     const uint32_t led1_pin = 13;
     const uint32_t led2_pin = 14;
     const uint32_t led3_pin = 15;
@@ -68,5 +69,7 @@ int main(void)
     nrf_ppi_channel_enable(NRF_PPI, sleep_ppi_ch);
     nrf_ppi_channel_enable(NRF_PPI, wake_ppi_ch);
 
+    timestamp = k_uptime_delta(&timestamp);
+    printk("program success: %d\n", (uint32_t)timestamp);
     return 0;
 }
