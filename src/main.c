@@ -1,12 +1,7 @@
 #include <zephyr/kernel.h>
-#include <hal/nrf_power.h>
-#include <hal/nrf_ppi.h>
-#include <hal/nrf_gpiote.h>
-#include <hal/nrf_gpio.h>
-#include <hal/nrf_egu.h>
-
 #include <nrfx_gpiote.h>
 #include <nrfx_ppi.h>
+#include <nrfx_power.h>
 
 #define BIT_READ(Val, Msk, Pos) (Val >> Pos) & Msk
 #define BIT_WRITE(Val, Msk, Pos) (Val & Msk) << Pos
@@ -30,6 +25,63 @@ static inline bool allocate_gpiote(uint8_t *ch)
     {
         printk("failed to allocate gpiote channel: %d\n", err);
         return false;
+    }
+    return ret;
+}
+
+static inline bool configure_gpiote_task(nrfx_gpiote_pin_t pin, uint8_t *ch, nrf_gpio_pin_pull_t pull, nrf_gpiote_polarity_t polarity, nrf_gpiote_outinit_t init)
+{
+    nrfx_gpiote_output_config_t config = {
+        .drive = NRF_GPIO_PIN_S0S1,
+        .input_connect = NRF_GPIO_PIN_INPUT_DISCONNECT,
+        .pull = pull};
+    nrfx_gpiote_task_config_t task = {
+        .task_ch = ch,
+        .polarity = polarity,
+        .init_val = init};
+    nrfx_err_t err = nrfx_gpiote_output_configure(pin, &config, &task);
+    bool ret = err == NRFX_SUCCESS;
+    if (!ret)
+    {
+        printk("failed to configure gpiote task: %d\n", err);
+    }
+    return ret;
+}
+
+static inline bool configure_gpiote_event(nrfx_gpiote_pin_t pin, uint8_t *ch, nrf_gpio_pin_pull_t pull, nrfx_gpiote_trigger_t trigger)
+{
+    nrfx_gpiote_input_config_t config = {
+        .pull = pull};
+    nrfx_gpiote_trigger_config_t trigger = {
+        .p_in_channel = ch,
+        .trigger = trigger};
+    nrfx_err_t err = nrfx_gpiote_input_configure(pin, &config, &trigger, NULL);
+    bool ret = err == NRFX_SUCCESS;
+    if (!ret)
+    {
+        printk("failed to configure gpiote event: %d\n", err);
+    }
+    return ret;
+}
+
+static inline bool assign_ppi_channel(nrf_ppi_channel_t *ch, uint32_t eep, uint32_t tep)
+{
+    nrfx_err_t err = nrfx_ppi_channel_assign(ch, eep, tep);
+    bool ret = err == NRFX_SUCCESS;
+    if (!ret)
+    {
+        printk("failed to assign ppi channel: %d\n", err);
+    }
+    return ret;
+}
+
+static inline bool enable_ppi_channel(nrf_ppi_channel_t *ch)
+{
+    nrfx_err_t err = nrfx_ppi_channel_enable(ch);
+    bool ret = err == NRFX_SUCCESS;
+    if (!ret)
+    {
+        printk("failed to enable ppi channel: %d\n", err);
     }
     return ret;
 }
@@ -78,28 +130,32 @@ int main(void)
     nrf_gpio_cfg_output(led2_pin);
     nrf_gpio_pin_clear(led2_pin);
 
-    // configure button->led behavior (GPIO)
-    nrf_gpio_cfg_output(led1_pin);
-    nrf_gpio_cfg_input(but4_pin, NRF_GPIO_PIN_PULLUP);
     // configure button->led behavior (GPIOTE)
-    nrf_gpiote_task_configure(NRF_GPIOTE, led1_gpiote_ch, led1_pin, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_HIGH);
-    nrf_gpiote_event_configure(NRF_GPIOTE, but4_gpiote_ch, but4_pin, NRF_GPIOTE_POLARITY_HITOLO);
-    nrf_gpiote_task_enable(NRF_GPIOTE, led1_gpiote_ch);
-    nrf_gpiote_event_enable(NRF_GPIOTE, but4_gpiote_ch);
+    if (!configure_gpiote_task(led1_pin, &led1_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_HIGH))
+        return 1;
+    if (!configure_gpiote_event(but4_pin, &but4_gpiote_ch, NRF_GPIO_PIN_PULLUP, NRFX_GPIOTE_TRIGGER_HITOLO))
+        return 1;
+    nrfx_gpiote_out_task_enable(led1_pin);
+    nrfx_gpiote_in_event_enable(but4_pin, false);
     // configure button->led behavior (PPI)
-    nrf_ppi_channel_endpoint_setup(NRF_PPI, button_ppi_ch, &NRF_GPIOTE->EVENTS_IN[but4_gpiote_ch], &NRF_GPIOTE->TASKS_OUT[led1_gpiote_ch]);
-    nrf_ppi_channel_enable(NRF_PPI, button_ppi_ch);
+    if (!assign_ppi_channel(button_ppi_ch, nrfx_gpiote_in_event_get(but4_pin), nrfx_gpiote_out_task_get(led1_pin)))
+        return 1;
+    if (!enable_ppi_channel(button_ppi_ch))
+        return 1;
 
-    // configure power->led behavior (GPIO)
-    nrf_gpio_cfg_output(led3_pin);
     // configure power->led behavior (GPIOTE)
-    nrf_gpiote_task_configure(NRF_GPIOTE, led3_gpiote_ch, led3_pin, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_LOW);
-    nrf_gpiote_task_enable(NRF_GPIOTE, led3_gpiote_ch);
+    if (!configure_gpiote_task(led3_pin, led3_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_LOW))
+        return 1;
+    nrfx_gpiote_out_task_enable(led3_pin);
     // configure power->led behavior (PPI)
-    nrf_ppi_channel_endpoint_setup(NRF_PPI, sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, &NRF_GPIOTE->TASKS_SET[led3_gpiote_ch]);
-    nrf_ppi_channel_endpoint_setup(NRF_PPI, wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, &NRF_GPIOTE->TASKS_CLR[led3_gpiote_ch]);
-    nrf_ppi_channel_enable(NRF_PPI, sleep_ppi_ch);
-    nrf_ppi_channel_enable(NRF_PPI, wake_ppi_ch);
+    if (!assign_ppi_channel(sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, nrfx_gpiote_set_task_get(led3_pin)))
+        return 1;
+    if (!assign_ppi_channel(wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, nrfx_gpiote_set_task_get(led3_gpiote_ch)))
+        return 1;
+    if (!enable_ppi_channel(sleep_ppi_ch))
+        return 1;
+    if (!enable_ppi_channel(wake_ppi_ch))
+        return 1;
 
     timestamp = k_uptime_delta(&timestamp);
     printk("program success: %d\n", (uint32_t)timestamp);
