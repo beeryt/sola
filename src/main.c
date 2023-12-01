@@ -123,10 +123,10 @@ int main(void)
 {
     uint64_t timestamp = k_uptime_get();
     printk("boot: %d\n", (uint32_t)timestamp);
-    const uint32_t led1_pin = 13;
-    const uint32_t led2_pin = 14;
-    const uint32_t led3_pin = 15;
-    const uint32_t but4_pin = 25;
+    const uint32_t led1_pin = DT_GPIO_PIN(DT_ALIAS(led0), gpios);
+    const uint32_t led2_pin = DT_GPIO_PIN(DT_ALIAS(led1), gpios);
+    const uint32_t led3_pin = DT_GPIO_PIN(DT_ALIAS(led2), gpios);
+    const uint32_t but4_pin = DT_GPIO_PIN(DT_ALIAS(sw3), gpios);
 
     NRFX_PPI_CHANNELS_USED;
     NRFX_PPI_GROUPS_USED;
