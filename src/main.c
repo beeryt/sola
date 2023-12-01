@@ -4,8 +4,6 @@
 #include <nrfx_power.h>
 
 #define BIT_READ(Val, Msk, Pos) (Val >> Pos) & Msk
-#define BIT_WRITE(Val, Msk, Pos) (Val & Msk) << Pos
-#define DEBUG
 
 static inline bool allocate_ppi(nrf_ppi_channel_t *ch)
 {
@@ -133,8 +131,10 @@ int main(void)
     NRFX_GPIOTE_CHANNELS_USED;
     NRFX_EGUS_USED;
 
+#ifdef DEBUG
     printk("MAINREGSTATUS: 0x%x\n", BIT_READ(NRF_POWER->MAINREGSTATUS, POWER_MAINREGSTATUS_MAINREGSTATUS_Msk, POWER_MAINREGSTATUS_MAINREGSTATUS_Pos));
     printk("REGOUT: 0x%x\n", BIT_READ(NRF_UICR->REGOUT0, UICR_REGOUT0_VOUT_Msk, UICR_REGOUT0_VOUT_Pos));
+#endif
 
     nrfx_err_t err;
     if (!init_gpiote())
@@ -189,6 +189,7 @@ int main(void)
     if (!enable_ppi_channel(wake_ppi_ch))
         return 1;
 
+#ifdef DEBUG
 #define _DEBUG_GPIOTE_CHANNEL(pin, endpoint) nrfx_gpiote_##endpoint##_address_get(pin)
 #define DEBUG_GPIOTE_CHANNEL(pin) \
     printk("%s\t0x%08x 0x%08x 0x%08x 0x%08x\n", #pin, _DEBUG_GPIOTE_CHANNEL(pin, out_task), _DEBUG_GPIOTE_CHANNEL(pin, set_task), _DEBUG_GPIOTE_CHANNEL(pin, clr_task), _DEBUG_GPIOTE_CHANNEL(pin, in_event));
@@ -196,6 +197,20 @@ int main(void)
     DEBUG_GPIOTE_CHANNEL(led1_pin);
     DEBUG_GPIOTE_CHANNEL(led3_pin);
     DEBUG_GPIOTE_CHANNEL(but4_pin);
+#endif DEBUG
+
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    uint64_t alt = k_uptime_get();
+    k_msleep(10);
+    alt = k_uptime_delta(&alt);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    nrfx_gpiote_out_task_trigger(led1_pin);
+    printk("known delay: %d\n", (uint32_t)alt);
 
     timestamp = k_uptime_delta(&timestamp);
     printk("program success: %d\n", (uint32_t)timestamp);
