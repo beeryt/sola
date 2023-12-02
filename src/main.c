@@ -5,29 +5,151 @@
 #include <nrfx_power.h>
 LOG_MODULE_REGISTER(app, CONFIG_APP_LOG_LEVEL);
 
-#define BIT_READ(Val, Msk, Pos) (Val >> Pos) & Msk
+extern char const *nrfx_err_string_get(nrfx_err_t);
+#define HELPER_NRFX_FORMAT_ERR(err) "%s", nrfx_error_string_get(err)
 
-static inline bool allocate_ppi(nrf_ppi_channel_t *ch)
+typedef uint8_t nrf_gpiote_channel_t;
+
+typedef struct
 {
-    nrfx_err_t err = nrfx_ppi_channel_alloc(ch);
-    bool ret = err == NRFX_SUCCESS;
-    if (!ret)
+    nrf_gpiote_channel_t led_gpiote_ch;
+    nrf_ppi_channel_t sleep_ppi_ch;
+    nrf_ppi_channel_t wake_ppi_ch;
+    // nrf_ppi_channel_group_t ppi_gp;
+} power_context_t;
+
+typedef struct
+{
+    nrf_gpiote_channel_t led_gpiote_ch;
+    nrf_gpiote_channel_t swi_gpiote_ch;
+    nrf_ppi_channel_t button_ppi_ch;
+} button_context_t;
+
+typedef struct
+{
+    power_context_t power;
+    button_context_t button;
+} app_context_t;
+
+nrfx_err_t gpiote_channel_alloc(nrf_gpiote_channel_t *ch)
+{
+    if (ch == NULL)
+        return NRFX_ERROR_INVALID_ADDR;
+    nrfx_err_t err = nrfx_gpiote_channel_alloc(ch);
+    if (err != NRFX_SUCCESS)
     {
-        LOG_DBG("failed to allocate ppi channel: 0x%08x", err);
+        LOG_ERR("failed to allocate gpiote channel: " HELPER_NRFX_FORMAT_ERR(err));
     }
-    return ret;
+#ifdef DEBUG
+    LOG_DBG("0x%02x", *ch);
+#endif
+    return err;
 }
 
-static inline bool allocate_gpiote(uint8_t *ch)
+nrfx_err_t ppi_channel_alloc(nrf_ppi_channel_t *ch)
 {
-    nrfx_err_t err = nrfx_gpiote_channel_alloc(ch);
-    bool ret = err == NRFX_SUCCESS;
-    if (!ret)
+    if (ch == NULL)
+        return NRFX_ERROR_INVALID_ADDR;
+    nrfx_err_t err = nrfx_ppi_channel_alloc(ch);
+    if (err != NRFX_SUCCESS)
     {
-        LOG_DBG("failed to allocate gpiote channel: 0x%08x", err);
-        return false;
+        LOG_ERR("failed to allocate ppi channel: " HELPER_NRFX_FORMAT_ERR(err));
     }
-    return ret;
+#ifdef DEBUG
+    LOG_DBG("0x%02x", *ch);
+#endif
+    return err;
+}
+
+nrfx_err_t ppi_channel_group_alloc(nrf_ppi_channel_group_t *gp)
+{
+    if (gp == NULL)
+        return NRFX_ERROR_INVALID_ADDR;
+    nrfx_err_t err = nrfx_ppi_group_alloc(gp);
+    if (err != NRFX_SUCCESS)
+    {
+        LOG_ERR("failed to allocate ppi channel group: " HELPER_NRFX_FORMAT_ERR(err));
+    }
+#ifdef DEBUG
+    LOG_DBG("0x%02x", *gp);
+#endif
+    return err;
+}
+
+nrfx_err_t create_button_context(button_context_t *ctx)
+{
+    nrfx_err_t err = NRFX_SUCCESS;
+
+    if (ctx == NULL)
+        return NRFX_ERROR_INVALID_ADDR;
+
+    err = gpiote_channel_alloc(&ctx->led_gpiote_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    err = gpiote_channel_alloc(&ctx->swi_gpiote_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    err = ppi_channel_alloc(&ctx->button_ppi_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    return err;
+}
+
+nrfx_err_t create_power_context(power_context_t *ctx)
+{
+    nrfx_err_t err = NRFX_SUCCESS;
+
+    if (ctx == NULL)
+    {
+        return NRFX_ERROR_INVALID_ADDR;
+    }
+
+    err = gpiote_channel_alloc(&ctx->led_gpiote_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    err = ppi_channel_alloc(&ctx->sleep_ppi_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    err = ppi_channel_alloc(&ctx->wake_ppi_ch);
+    if (err != NRFX_SUCCESS)
+        return err;
+
+    // err = ppi_channel_group_alloc(&ctx->ppi_gp);
+    // if (err != NRFX_SUCCESS)
+    //     return err;
+
+    return err;
+}
+
+nrfx_err_t create_app_context(app_context_t *ctx)
+{
+    nrfx_err_t err = NRFX_SUCCESS;
+
+    if (ctx == NULL)
+    {
+        return NRFX_ERROR_INVALID_PARAM;
+    }
+
+    err = create_power_context(&ctx->power);
+    if (err != NRFX_SUCCESS)
+    {
+        LOG_ERR("failed to create power context: " HELPER_NRFX_FORMAT_ERR(err));
+        return err;
+    }
+
+    err = create_button_context(&ctx->button);
+    if (err != NRFX_SUCCESS)
+    {
+        LOG_ERR("failed to create button context: " HELPER_NRFX_FORMAT_ERR(err));
+        return err;
+    }
+
+    return err;
 }
 
 static inline bool configure_gpiote_task(nrfx_gpiote_pin_t pin, uint8_t ch, nrf_gpio_pin_pull_t pull, nrf_gpiote_polarity_t polarity, nrf_gpiote_outinit_t init)
@@ -128,67 +250,47 @@ int main(void)
     const uint32_t led3_pin = DT_GPIO_PIN(DT_ALIAS(led2), gpios);
     const uint32_t but4_pin = DT_GPIO_PIN(DT_ALIAS(sw3), gpios);
 
+    if (!init_gpiote())
+        return 1;
+
+    app_context_t ctx;
+    nrfx_err_t err = create_app_context(&ctx);
+    if (err != NRFX_SUCCESS)
+    {
+        LOG_ERR("failed to create app context: " HELPER_NRFX_FORMAT_ERR(err));
+        return 1;
+    }
+
     NRFX_PPI_CHANNELS_USED;
     NRFX_PPI_GROUPS_USED;
     NRFX_GPIOTE_CHANNELS_USED;
     NRFX_EGUS_USED;
 
-#ifdef DEBUG
-    LOG_DBG("MAINREGSTATUS: 0x%x", BIT_READ(NRF_POWER->MAINREGSTATUS, POWER_MAINREGSTATUS_MAINREGSTATUS_Msk, POWER_MAINREGSTATUS_MAINREGSTATUS_Pos));
-    LOG_DBG("REGOUT: 0x%x", BIT_READ(NRF_UICR->REGOUT0, UICR_REGOUT0_VOUT_Msk, UICR_REGOUT0_VOUT_Pos));
-#endif
-
-    nrfx_err_t err;
-    if (!init_gpiote())
-        return 1;
-
-#define ALLOC_GPIOTE_CHANNEL(ident)                                 \
-    uint8_t ident;                                                  \
-    {                                                               \
-        if (!allocate_gpiote(&ident))                               \
-            return 1;                                               \
-        LOG_DBG("allocated gpiote channel %x (%s)", ident, #ident); \
-    }
-    ALLOC_GPIOTE_CHANNEL(led1_gpiote_ch);
-    ALLOC_GPIOTE_CHANNEL(led3_gpiote_ch);
-    ALLOC_GPIOTE_CHANNEL(but4_gpiote_ch);
-
-#define ALLOC_PPI_CHANNEL(ident)                                 \
-    nrf_ppi_channel_t ident;                                     \
-    {                                                            \
-        if (!allocate_ppi(&ident))                               \
-            return 1;                                            \
-        LOG_DBG("allocated ppi channel %x (%s)", ident, #ident); \
-    }
-    ALLOC_PPI_CHANNEL(button_ppi_ch);
-    ALLOC_PPI_CHANNEL(sleep_ppi_ch);
-    ALLOC_PPI_CHANNEL(wake_ppi_ch);
-
     // configure button->led behavior (GPIOTE)
-    if (!configure_gpiote_task(led1_pin, led1_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_HIGH))
+    if (!configure_gpiote_task(led1_pin, ctx.button.led_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_HIGH))
         return 1;
-    if (!configure_gpiote_event(but4_pin, &but4_gpiote_ch, NRF_GPIO_PIN_PULLUP, NRFX_GPIOTE_TRIGGER_HITOLO))
+    if (!configure_gpiote_event(but4_pin, &ctx.button.swi_gpiote_ch, NRF_GPIO_PIN_PULLUP, NRFX_GPIOTE_TRIGGER_HITOLO))
         return 1;
     nrfx_gpiote_out_task_enable(led1_pin);
     nrfx_gpiote_trigger_enable(but4_pin, false);
     // configure button->led behavior (PPI)
-    if (!assign_ppi_channel(button_ppi_ch, nrfx_gpiote_in_event_address_get(but4_pin), nrfx_gpiote_out_task_address_get(led1_pin)))
+    if (!assign_ppi_channel(ctx.button.button_ppi_ch, nrfx_gpiote_in_event_address_get(but4_pin), nrfx_gpiote_out_task_address_get(led1_pin)))
         return 1;
-    if (!enable_ppi_channel(button_ppi_ch))
+    if (!enable_ppi_channel(ctx.button.button_ppi_ch))
         return 1;
 
     // configure power->led behavior (GPIOTE)
-    if (!configure_gpiote_task(led3_pin, led3_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_LOW))
+    if (!configure_gpiote_task(led3_pin, ctx.power.led_gpiote_ch, NRF_GPIO_PIN_NOPULL, NRF_GPIOTE_POLARITY_TOGGLE, NRF_GPIOTE_INITIAL_VALUE_LOW))
         return 1;
     nrfx_gpiote_out_task_enable(led3_pin);
     // configure power->led behavior (PPI)
-    if (!assign_ppi_channel(sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, nrfx_gpiote_set_task_address_get(led3_pin)))
+    if (!assign_ppi_channel(ctx.power.sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, nrfx_gpiote_set_task_address_get(led3_pin)))
         return 1;
-    if (!assign_ppi_channel(wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, nrfx_gpiote_clr_task_address_get(led3_pin)))
+    if (!assign_ppi_channel(ctx.power.wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, nrfx_gpiote_clr_task_address_get(led3_pin)))
         return 1;
-    if (!enable_ppi_channel(sleep_ppi_ch))
+    if (!enable_ppi_channel(ctx.power.sleep_ppi_ch))
         return 1;
-    if (!enable_ppi_channel(wake_ppi_ch))
+    if (!enable_ppi_channel(ctx.power.wake_ppi_ch))
         return 1;
 
 #ifdef DEBUG
