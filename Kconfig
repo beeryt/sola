@@ -1,0 +1,5 @@
+config APP_LOG_LEVEL
+  int "App Debug Level"
+  default LOG_MAX_LEVEL
+
+source "Kconfig.zephyr"
