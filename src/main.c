@@ -2,7 +2,7 @@
 #include <zephyr/logging/log.h>
 #include <zephyr/drivers/sensor.h>
 #include <zephyr/device.h>
-LOG_MODULE_REGISTER(app, CONFIG_APP_LOG_LEVEL);
+LOG_MODULE_REGISTER(app, 4);
 
 int main(void)
 {
