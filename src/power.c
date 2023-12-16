@@ -54,10 +54,10 @@ void init_power_led()
 
     nrfx_gpiote_out_task_enable(pin);
 
-    err = nrfx_ppi_channel_assign(sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, nrfx_gpiote_set_task_addr_get(pin));
+    err = nrfx_ppi_channel_assign(sleep_ppi_ch, &NRF_POWER->EVENTS_SLEEPENTER, nrfx_gpiote_set_task_address_get(pin));
     FATAL_ERR("failed to assign sleep ppi channel");
 
-    err = nrfx_ppi_channel_assign(wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, nrfx_gpiote_clr_task_addr_get(pin));
+    err = nrfx_ppi_channel_assign(wake_ppi_ch, &NRF_POWER->EVENTS_SLEEPEXIT, nrfx_gpiote_clr_task_address_get(pin));
     FATAL_ERR("failed to assign wake ppi channel");
 
     err = nrfx_ppi_channels_include_in_group(BIT(sleep_ppi_ch) | BIT(wake_ppi_ch), ppi_gp);
