@@ -7,7 +7,7 @@ LOG_MODULE_REGISTER(power, 4);
 #include <nrfx_ppi.h>
 
 #define CONFIG_POWER_LED_GPIO_PIN 13
-#define CONFIG_POWER_LED_PRIORITY CONFIG_KERNEL_INIT_PRIORITY_DEVICE
+#define CONFIG_POWER_LED_PRIORITY CONFIG_MAIN_THREAD_PRIORITY
 
 typedef uint8_t nrf_gpiote_channel_t;
 nrf_gpiote_channel_t led_gpiote_ch;
